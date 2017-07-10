@@ -6,13 +6,13 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * 
  * @package wangEditor
  * @author journey.ad
- * @version 1.0.0
+ * @version 1.0.1
  * @link https://github.com/journey-ad/wangEditor-Typecho-Plugin
  */
 class wangEditor_Plugin implements Typecho_Plugin_Interface
 {
 
-    protected static $VERSION = '1.0.0';
+    protected static $VERSION = '1.0.1';
     /**
      * 激活插件方法,如果激活失败,直接抛出异常
      * 
@@ -44,7 +44,13 @@ class wangEditor_Plugin implements Typecho_Plugin_Interface
      * @return void
      */
     public static function config(Typecho_Widget_Helper_Form $form)
-    {}
+    {
+        $beautify= new Typecho_Widget_Helper_Form_Element_Radio(
+            'beautify', array('1'=>_t('开启'),'0'=>_t('关闭')), '1',
+            _t('自动格式化代码'),
+            _t(''));
+        $form->addInput($beautify);
+    }
 
     /**
      * 个人用户的配置面板
@@ -64,26 +70,56 @@ class wangEditor_Plugin implements Typecho_Plugin_Interface
         $VERSION = self::$VERSION;
         $cssUrl = Helper::options()->pluginUrl.'/wangEditor/release/wangEditor.min.css?v='.$VERSION;
         $jsUrl = Helper::options()->pluginUrl.'/wangEditor/release/wangEditor.min.js?v='.$VERSION;
+        $libUrl = Helper::options()->pluginUrl.'/wangEditor/lib/';
+        $beautify = Typecho_Widget::widget('Widget_Options')->plugin('wangEditor')->beautify;
 ?>
         <script>
             var uploadURL = '<?php Helper::security()->index('/action/upload?cid=CID'); ?>';
         </script>
 <?php
+        if($beautify){
+            echo ("<script type='text/javascript' src='".$libUrl."htmlformat.js'></script>\n");
+            $do_js_beautify = 'do_js_beautify();';
+        }
         echo <<<EOF
 <link rel="stylesheet" href="{$cssUrl}" />
 <script type="text/javascript" src="{$jsUrl}"></script>
 <script>
     $(document).ready(function() {
         var textarea = $('#text').parent("p");
-        $('#text').after("<div id='text-wangEditor' style='background: #fff;'></div>");
+        $('#text').before("<div id='text-wangEditor' style='background:#fff;position:relative;'></div>");
         postwangEditor = new wangEditor("#text-wangEditor");
         postwangEditor.customConfig.zIndex = 1;
         postwangEditor.customConfig.onchange = function (html) {
-            $('#text').text(html);
+            $('#text').val(html);
         }
         $('#text').hide();
         postwangEditor.create();
         postwangEditor.txt.html($('#text').text());
+        $('div.w-e-toolbar').append('<div class="w-e-editor"><span class="w-e-menu w-e-visual active" onclick="changeView(\'visual\')">可视化</span><span class="w-e-menu w-e-source" onclick="changeView(\'source\')">文本</span></div>');
+        changeView = function(x) {
+            if(x === 'source'){
+                $('.w-e-text-container').hide();
+                $('#text').show();
+                $('.w-e-visual').removeClass('active');
+                $('.w-e-source').addClass('active');
+            }else{
+                postwangEditor.txt.html($('#text').val());
+                $('#text').hide();
+                $('.w-e-text-container').show();
+                $('.w-e-source').removeClass('active');
+                $('.w-e-visual').addClass('active');
+            }
+            {$do_js_beautify}
+        }
+        $(".resize").bind("mousedown",function(event){
+            $(document).bind("mousemove",function(ev){
+                $('.w-e-text-container').height($('#text').height());
+            });
+        });
+        $(document).bind("mouseup",function(){
+            $(this).unbind("mousemove");
+        });
 
         // 图片附件插入
         Typecho.insertFileToEditor = function (file, url, isImage) {
@@ -179,11 +215,12 @@ class wangEditor_Plugin implements Typecho_Plugin_Interface
                         });
                     }
                 }
-
-                }
-
-            });
-
+            }
+        });
+        function do_js_beautify() {
+            js_source = $('#text').val().replace(/^\s+/, '');
+            $('#text').val(style_html(js_source, 4, ' ', 80));
+        };
     });
 </script>
 EOF;
